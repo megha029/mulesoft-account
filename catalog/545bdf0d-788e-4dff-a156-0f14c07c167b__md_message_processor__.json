@@ -1,0 +1,11 @@
+{
+    "inputMessageMetadata": {},
+    "outputMessageMetadata": {
+        "messagePayload": {
+            "connectorName": "#_custom_mule_metadata_type_#",
+            "typeId": "bankdetails"
+        }
+    },
+    "id": "545bdf0d-788e-4dff-a156-0f14c07c167b",
+    "version": "5.2.0.0"
+}

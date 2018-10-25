@@ -1,0 +1,45 @@
+#%RAML 1.0
+baseUri: /api/v1/dda
+title: accountDetails
+version: v1
+
+protocols: [HTTP]
+mediaType: application/json  
+
+uses: 
+  library: library.raml
+
+/accounts/transactions:
+ get:
+   description: get all account details for specific customerid
+   queryParameters: 
+     customerId: 
+       type: string
+       required: true
+     startDate: 
+       type: date-only
+       required: true
+     endDate:
+       type: date-only
+       required: true 
+
+   responses: 
+     200:
+       body: 
+        application/json:
+         example: !include AccountDetailExample.raml
+
+
+     400:
+       body: 
+         application/json:
+           type: library.Error
+           example: {"message":"Invalid Request please check url",                         "code":400}   
+     500:
+       body:
+        application/json:
+          type: library.Error
+          example: {"message":"server not found", "code":500}   
+
+         
+           

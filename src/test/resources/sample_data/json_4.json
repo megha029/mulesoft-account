@@ -1,0 +1,29 @@
+{
+  "total": 1,
+  "totalPages": 1,
+  "page": 1,
+  "account": [
+    {
+      "customerId": "????",
+      "name": "????",
+      "status": "????",
+      "accountId": "????",
+      "accountType": "????",
+      "displayName": "????",
+      "accountDescriptorId": 1,
+      "transactionId": "????",
+      "referenceTransactionId": "????",
+      "transactionTimestamp": "????",
+      "amount": 1,
+      "nickname": "????",
+      "accountNumber": "????",
+      "interestRate": 1,
+      "currency": "????",
+      "transactions": [
+        {
+          
+        }
+      ]
+    }
+  ]
+}

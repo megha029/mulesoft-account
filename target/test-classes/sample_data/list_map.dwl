@@ -1,0 +1,29 @@
+%dw 1.0
+%output application/java
+---
+[{
+	AccountDescriptorId: 1,
+	AccountId: "????",
+	AccountMasterId: 1,
+	AccountNumber: "????",
+	AccountType: "????",
+	Amount: 2,
+	CheckNumber: 1,
+	Currency: "????",
+	CustomerId: "????",
+	DepositTransactionId: 1,
+	Description: "????",
+	DisplayName: "????",
+	InterestRate: 1,
+	LineOfBusiness: "????",
+	Nickname: "????",
+	ParentAccountId: "????",
+	Payee: "????",
+	ReferenceTransactionId: "????",
+	Status: "????",
+	TransactionId: "????",
+	TransactionTimestamp: |2003-10-01T23:57:59Z|,
+	TransactionType: "????",
+	TransferIn: true,
+	TransferOut: true
+}]

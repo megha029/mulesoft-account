@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:amqp="http://www.mulesoft.org/schema/mule/amqp"
+	xmlns:cluster="http://www.mulesoft.org/schema/mule/ee/cluster" xmlns:apikit="http://www.mulesoft.org/schema/mule/apikit"
+	xmlns:validation="http://www.mulesoft.org/schema/mule/validation" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:db="http://www.mulesoft.org/schema/mule/db" xmlns:context="http://www.springframework.org/schema/context" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:spring="http://www.springframework.org/schema/beans" 
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.mulesoft.org/schema/mule/amqp http://www.mulesoft.org/schema/mule/amqp/current/mule-amqp.xsd
+http://www.mulesoft.org/schema/mule/apikit http://www.mulesoft.org/schema/mule/apikit/current/mule-apikit.xsd
+http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
+http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context-current.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/validation http://www.mulesoft.org/schema/mule/validation/current/mule-validation.xsd">
+    <db:mysql-config name="MySQL_Configuration" host="${db.host}" port="${db.port}" user="${db.user}" password="${db.password}" database="${db.database}" doc:name="MySQL Configuration"/>
+    <context:property-placeholder location="account-${env}.properties"/>
+    <http:listener-config name="HTTP_Listener_Configuration" host="0.0.0.0" port="${http.port}" doc:name="HTTP Listener Configuration"/>
+    <configuration defaultExceptionStrategy-ref="globalChoice_Exception_Strategy" doc:name="Configuration">
+        <http:config useTransportForUris="false"/>
+    </configuration>
+     <amqp:connector name="AMQP_0_9_Connector" validateConnections="false" host="woodpecker.rmq.cloudamqp.com" virtualHost="bcgvuxpv" username="bcgvuxpv" password="v_R_wSZAFm482LIK5ggY29ahUDejmYJc" doc:name="AMQP-0-9 Connector"/>
+    <choice-exception-strategy name="globalChoice_Exception_Strategy">
+        <catch-exception-strategy doc:name="Bad Request" when="#[exception.causedBy(org.mule.extension.validation.api.MultipleValidationException)]">
+            <set-payload value="{&quot;code&quot;:400, &quot;message&quot;: &quot;#[exception.message]&quot; } " doc:name="Bad Request"/>
+            <set-property propertyName="http.status" value="400" doc:name="Property"/>
+            <logger level="INFO" doc:name="Logger"/>
+        </catch-exception-strategy>
+         <catch-exception-strategy doc:name="Method Not Allowed Exception Strategy" when="#[exception.causedBy(org.mule.module.apikit.exception.MethodNotAllowedException)]">
+            <set-payload value="{ &quot;code&quot;: 405, &quot;message&quot;: &quot;Method not allowed&quot;  } " doc:name="Set Payload"/>
+            <set-property propertyName="http.status" value="405" doc:name="Property"/>
+            <logger level="INFO" doc:name="Logger"/>
+            </catch-exception-strategy>
+           
+         <catch-exception-strategy when="#[exception.causedBy(java.util.NoSuchElementException)]" doc:name=" Customer Not Found Exception Strategy">
+            <set-payload value="{&quot;code&quot;:404, &quot;message&quot;: &quot;#[exception.message]&quot; } " doc:name="Set Payload"/>
+            <set-property propertyName="http.status" value="404" doc:name="Property"/>
+            <logger level="INFO" doc:name="Logger"/>
+        </catch-exception-strategy>
+        
+         <catch-exception-strategy  doc:name="Internal Server Error">
+            <set-payload value="{ &quot;code&quot;: 500, &quot;message&quot;: &quot;Internal Server Error&quot;  } " doc:name="Set Payload"/>
+            <set-property propertyName="http.status" value="500" doc:name="Property"/>
+            <logger level="INFO" doc:name="Logger"/>
+          
+        </catch-exception-strategy>
+      
+        
+    </choice-exception-strategy>
+   
+   <!--  <apikit:mapping-exception-strategy name="Accountdetails-apiKitGlobalExceptionMapping">
+        <apikit:mapping statusCode="404">
+            <apikit:exception value="org.mule.module.apikit.exception.NotFoundException" />
+            <set-payload value="{ &quot;message&quot;: &quot;Customer not found&quot; }" doc:name="Set Payload"/>
+            <set-property propertyName="Content-Type" value="application/json" doc:name="Property"/>
+            <logger level="INFO" doc:name="Logger"/>
+        </apikit:mapping>
+        <apikit:mapping statusCode="405">
+            <apikit:exception value="org.mule.module.apikit.exception.MethodNotAllowedException" />
+            <set-payload value="{ &quot;message&quot;: &quot;Method not allowed&quot; }" doc:name="Set Payload"/>
+            <set-property propertyName="Content-Type" value="application/json" doc:name="Property"/>
+            <logger level="INFO" doc:name="Logger"/>
+        </apikit:mapping>
+        <apikit:mapping statusCode="415">
+            <apikit:exception value="org.mule.module.apikit.exception.UnsupportedMediaTypeException" />
+            <set-payload value="{ &quot;message&quot;: &quot;Unsupported media type&quot; }" doc:name="Set Payload"/>
+            <set-property propertyName="Content-Type" value="application/json" doc:name="Property"/>
+            <logger level="INFO" doc:name="Logger"/>
+        </apikit:mapping>
+        <apikit:mapping statusCode="406">
+            <apikit:exception value="org.mule.module.apikit.exception.NotAcceptableException" />
+            <set-payload value="{ &quot;message&quot;: &quot;Not acceptable&quot; }" doc:name="Set Payload"/>
+            <set-property propertyName="Content-Type" value="application/json" doc:name="Property"/>
+            <logger level="INFO" doc:name="Logger"/>
+        </apikit:mapping>
+        <apikit:mapping statusCode="400">
+            <apikit:exception value="org.mule.extension.validation.api.MultipleValidationException" />
+            <set-payload value="#[exception.message]" doc:name="Set Payload"/>
+            <set-property propertyName="http.status" value="400" doc:name="Property"/>
+            <logger level="INFO" doc:name="Logger"/>
+        </apikit:mapping>
+    </apikit:mapping-exception-strategy> -->
+</mule>

@@ -1,0 +1,159 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:tracking="http://www.mulesoft.org/schema/mule/ee/tracking" xmlns:ws="http://www.mulesoft.org/schema/mule/ws"
+	xmlns:amqp="http://www.mulesoft.org/schema/mule/amqp" xmlns:validation="http://www.mulesoft.org/schema/mule/validation" xmlns:dw="http://www.mulesoft.org/schema/mule/ee/dw" xmlns:json="http://www.mulesoft.org/schema/mule/json" xmlns:metadata="http://www.mulesoft.org/schema/mule/metadata" xmlns:db="http://www.mulesoft.org/schema/mule/db" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:spring="http://www.springframework.org/schema/beans" 
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.mulesoft.org/schema/mule/ws http://www.mulesoft.org/schema/mule/ws/current/mule-ws.xsd
+http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/json http://www.mulesoft.org/schema/mule/json/current/mule-json.xsd
+http://www.mulesoft.org/schema/mule/ee/dw http://www.mulesoft.org/schema/mule/ee/dw/current/dw.xsd
+http://www.mulesoft.org/schema/mule/validation http://www.mulesoft.org/schema/mule/validation/current/mule-validation.xsd
+http://www.mulesoft.org/schema/mule/amqp http://www.mulesoft.org/schema/mule/amqp/current/mule-amqp.xsd
+http://www.mulesoft.org/schema/mule/ee/tracking http://www.mulesoft.org/schema/mule/ee/tracking/current/mule-tracking-ee.xsd">
+    <validation:config name="Validation_Configuration" doc:name="Validation Configuration"/>
+    <ws:consumer-config name="Web_Service_Consumer" wsdlLocation="bankdetails.wsdl.xml" service="BankDetailPortService" port="BankDetailPortSoap11" serviceAddress="http://34.236.109.151:8000/ws" doc:name="Web Service Consumer"/>
+    <flow name="implementationFlow">
+        <validation:all config-ref="Validation_Configuration" doc:name="Validation">
+            <validation:validations>
+                <validation:matches-regex value="#[message.inboundProperties.'http.query.params'.customerId]" regex="[0-9]{9}" message="Customer Id Not Found"/>
+                <validation:matches-regex value="#[message.inboundProperties.'http.query.params'.startDate]" regex="^([0-9]{4})-(1[0-2]|0[1-9])-(3[01]|[12][0-9]|0[1-9])$" caseSensitive="true" message="Start Date Not Found"/>
+                <validation:matches-regex value="#[message.inboundProperties.'http.query.params'.endDate]" regex="^([0-9]{4})-(1[0-2]|0[1-9])-(3[01]|[12][0-9]|0[1-9])" caseSensitive="true" message="End Date Not Found"/>
+            </validation:validations>
+        </validation:all>
+        <db:select config-ref="MySQL_Configuration" doc:name="Database">
+            <db:parameterized-query><![CDATA[select acc.AccountMasterId,acc.ParentAccountId,acc.Nickname,acc.LineOfBusiness,
+acc.AccountNumber,acc.InterestRate,acc.Currency,
+acc.TransferIn,acc.TransferOut,asd.AccountId,asd.AccountType,
+asd.DisplayName,
+asd.Description,asd.Status,asd.AccountDescriptorId,asd.CustomerId,tra.TransactionId,
+tra.ReferenceTransactionId,tra.TransactionTimestamp,
+tra.Amount,dp.DepositTransactionId,dp.TransactionType,dp.Payee,dp.CheckNumber
+from account acc, accountdescriptor asd, transaction tra,deposittransaction dp 
+where asd.CustomerId= #[message.inboundProperties.'http.query.params'.customerId] and tra.TransactionTimestamp between #[message.inboundProperties.'http.query.params'.startDate] and #[message.inboundProperties.'http.query.params'.endDate]]]></db:parameterized-query>
+        </db:select>
+        <validation:is-not-empty message="Customer Id Not Found" exceptionClass="java.util.NoSuchElementException" value="#[payload]" doc:name="Validation"/>
+        <dw:transform-message doc:name="Transform Message" metadata:id="7ea31024-755c-4dd3-ba70-30d81cdf07fb">
+            <dw:input-payload doc:sample="sample_data\list_map.dwl"/>
+            <dw:set-payload><![CDATA[%dw 1.0
+%output application/java
+---
+{
+	account: payload map ((payload01 , indexOfPayload01) -> {
+		customerId: payload01.CustomerId,
+		status: payload01.Status,
+		accountId: payload01.AccountId,
+		accountType: payload01.AccountType,
+		displayName: payload01.DisplayName,
+		accountDescriptorId: payload01.AccountDescriptorId,
+		transactionId: payload01.TransactionId,
+		transactionTimestamp: payload01.TransactionTimestamp as :string,
+		nickname: payload01.Nickname,
+		accountNumber: payload01.AccountNumber,
+		interestRate: payload01.InterestRate,
+		currency: payload01.Currency,
+		transactions: [{
+			transactionType: payload01.TransactionType,
+			payee: payload01.Payee,
+			checkNumber: payload01.CheckNumber as :string
+		}]
+	})
+}]]></dw:set-payload>
+
+        </dw:transform-message>
+
+        <logger level="INFO" doc:name="Logger"/>
+    </flow>
+
+    <flow name="AmqpFlow">
+        <object-to-string-transformer doc:name="Object to String"/>
+        <amqp:outbound-endpoint queueName="accounts" responseTimeout="10000" exchange-pattern="request-response" doc:name="AMQP-0-9"/>
+    </flow>
+    <flow name="SoapConsumeFlow">
+        <set-variable variableName="customerId" value="#[message.inboundProperties.'http.query.params'.customerId]" doc:name="Variable"/>
+        <dw:transform-message doc:name="Transform Message" metadata:id="5959b91a-6a77-4712-b745-e2cfbb476bd0">
+            <dw:input-payload doc:sample="sample_data\json_6.json"/>
+            <dw:input-variable doc:sample="sample_data\map_string_string.dwl" mimeType="application/json" variableName="customerId"/>
+            <dw:set-payload><![CDATA[%dw 1.0
+%output application/xml
+%namespace ns0 http://bank-web-service
+---
+{
+	ns0#getBankDetailsRequest: {
+		ns0#customerId: inboundProperties."http.query.params".customerId
+	}
+}]]></dw:set-payload>
+        </dw:transform-message>
+        <ws:consumer config-ref="Web_Service_Consumer" operation="getBankDetails" doc:name="Web Service Consumer"/>
+        <dw:transform-message doc:name="Transform Message">
+            <dw:set-payload><![CDATA[%dw 1.0
+%output application/xml
+---
+payload]]></dw:set-payload>
+        </dw:transform-message>
+        <logger level="INFO" doc:name="Logger"/>
+    </flow>
+   <flow name="Accounts_implementationFlow">
+        <validation:all config-ref="Validation_Configuration" doc:name="Validation">
+            <validation:validations>
+                <validation:matches-regex value="#[message.inboundProperties.'http.query.params'.customerId]" regex="[0-9]{9}" message="Customer Id Not Found"/>
+                <validation:matches-regex value="#[message.inboundProperties.'http.query.params'.endDate]" regex="^([0-9]{4})-(1[0-2]|0[1-9])-(3[01]|[12][0-9]|0[1-9])" caseSensitive="true" message="End Date Not Found"/>
+                <validation:matches-regex value="#[message.inboundProperties.'http.query.params'.startDate]" regex="^([0-9]{4})-(1[0-2]|0[1-9])-(3[01]|[12][0-9]|0[1-9])" caseSensitive="true" message="Start Date Not Found" exceptionClass="java.lang.IllegalArgumentException"/>
+            </validation:validations>
+        </validation:all>
+        <db:select config-ref="MySQL_Configuration" doc:name="Database">
+            <db:parameterized-query><![CDATA[select acc.AccountMasterId,acc.ParentAccountId,acc.Nickname,acc.LineOfBusiness,
+acc.AccountNumber,acc.InterestRate,acc.Currency,
+acc.TransferIn,acc.TransferOut,asd.AccountId,asd.AccountType,
+asd.DisplayName,
+asd.Description,asd.Status,asd.AccountDescriptorId,asd.CustomerId,tra.TransactionId,
+tra.ReferenceTransactionId,tra.TransactionTimestamp,
+tra.Amount,dp.DepositTransactionId,dp.TransactionType,dp.Payee,dp.CheckNumber
+from account acc, accountdescriptor asd, transaction tra,deposittransaction dp 
+where asd.CustomerId= #[message.inboundProperties.'http.query.params'.customerId] and tra.TransactionTimestamp between #[message.inboundProperties.'http.query.params'.startDate] and #[message.inboundProperties.'http.query.params'.endDate]]]></db:parameterized-query>
+        </db:select>
+        <validation:is-not-empty message="Customer Id not found" exceptionClass="java.util.NoSuchElementException" value="#[payload]" doc:name="Validation" config-ref="Validation_Configuration"/>
+        <dw:transform-message doc:name="Transform Message" metadata:id="7ea31024-755c-4dd3-ba70-30d81cdf07fb">
+            <dw:input-payload doc:sample="sample_data\list_map.dwl"/>
+            <dw:set-payload><![CDATA[%dw 1.0
+%output application/java
+---
+{
+	account: payload map ((payload01 , indexOfPayload01) -> {
+		customerId: payload01.CustomerId,
+		status: payload01.Status,
+		accountId: payload01.AccountId,
+		accountType: payload01.AccountType,
+		displayName: payload01.DisplayName,
+		accountDescriptorId: payload01.AccountDescriptorId,
+		transactionId: payload01.TransactionId,
+		transactionTimestamp: payload01.TransactionTimestamp as :string,
+		nickname: payload01.Nickname,
+		accountNumber: payload01.AccountNumber,
+		interestRate: payload01.InterestRate,
+		currency: payload01.Currency,
+		transactions: [{
+			transactionType: payload01.TransactionType,
+			payee: payload01.Payee,
+			checkNumber: payload01.CheckNumber as :string
+		}]
+	})
+}]]></dw:set-payload>
+        </dw:transform-message>
+        <logger message="#[payload]" level="INFO" doc:name="Logger"/>
+        <scatter-gather doc:name="Scatter-Gather">
+            <custom-aggregation-strategy class="accountstransaction.CustomAggregation"/>
+            <processor-chain>
+                <json:object-to-json-transformer doc:name="Object to JSON"/>
+                <logger level="INFO" doc:name="PostmanFlow"/>
+            </processor-chain>
+            <flow-ref name="AmqpFlow" doc:name="AmqpFlow"/>
+            <flow-ref name="SoapConsumeFlow" doc:name="Soap_Flow Reference"/>
+        </scatter-gather>
+        <logger level="INFO" doc:name="Logger"/>
+    </flow>
+ 
+</mule>
